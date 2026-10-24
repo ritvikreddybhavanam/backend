@@ -1,3 +1,4 @@
+
 package com.example.backend.config;
 
 import com.google.auth.oauth2.GoogleCredentials;
@@ -7,6 +8,8 @@ import jakarta.annotation.PostConstruct;
 import org.springframework.context.annotation.Configuration;
 
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Configuration
 public class FirebaseConfig {
@@ -17,25 +20,40 @@ public class FirebaseConfig {
             return;
         }
 
-        try (InputStream serviceAccount = getClass()
-                .getClassLoader()
-                .getResourceAsStream("firebase-service-account.json")) {
+        String credentialsPath =
+                System.getenv("GOOGLE_APPLICATION_CREDENTIALS");
 
-            if (serviceAccount == null) {
-                System.out.println("⚠️ [WARN] firebase-service-account.json not found in resources. Firebase push notifications will be disabled.");
-                return;
+        InputStream serviceAccount = null;
+
+        if (credentialsPath != null && !credentialsPath.isBlank()) {
+            Path path = Path.of(credentialsPath);
+
+            if (Files.isRegularFile(path)) {
+                serviceAccount = Files.newInputStream(path);
             }
+        } else {
+            serviceAccount = getClass()
+                    .getClassLoader()
+                    .getResourceAsStream("firebase-service-account.json");
+        }
 
-            FirebaseOptions options =
-                    FirebaseOptions.builder()
-                            .setCredentials(
-                                    GoogleCredentials.fromStream(
-                                            serviceAccount
-                                    )
-                            )
-                            .build();
+        if (serviceAccount == null) {
+            System.out.println(
+                    "[WARN] Firebase credentials not found. "
+                    + "Firebase Admin features are disabled."
+            );
+            return;
+        }
+
+        try (InputStream credentials = serviceAccount) {
+            FirebaseOptions options = FirebaseOptions.builder()
+                    .setCredentials(
+                            GoogleCredentials.fromStream(credentials)
+                    )
+                    .build();
 
             FirebaseApp.initializeApp(options);
+            System.out.println("[INFO] Firebase Admin initialized.");
         }
     }
 }
